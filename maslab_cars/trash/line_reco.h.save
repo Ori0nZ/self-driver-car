@@ -1,0 +1,289 @@
+#include <vector>
+#include <string>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <cmath>
+#include <iostream>
+#include <cstddef>
+//#include <fstream>
+
+using namespace std;
+using namespace cv;
+
+
+class Line
+{
+	private:
+		
+		/*
+		* Detect direction for correction depends on left line.
+		* Cases depends on "perfect" left line with coordinates (195;0), (0;267).
+		* If it all clear, returns "FORWARD".
+		*/
+		string left_side(vector<float> coordinates)
+		{
+			//fout.open("line_logs.txt");
+			float x_1 = -8; //165
+			float x_2 = -70; //-45
+			float delta = 20;
+			//cout << "IDEAL: 195 0\n";
+			//cout << "REAL: " << coordinates[0] << " " << coordinates[1] << endl;
+			cout << coordinates[0] << " " << coordinates[1] << " "; 
+			/*if (coordinates[0] > 399 && coordinates[1] > 199)
+			{
+				return "BLANK";
+			}
+			else*/ if ( x_1 > coordinates[0] && x_2 > coordinates[1] && ( (x_1 - coordinates[0]) > delta || (x_2 - coordinates[1]) > delta ) || x_1 > coordinates[0] && x_2 < coordinates[1] && ( (x_1 - coordinates[0]) > delta || (coordinates[1] - x_2) > delta ) )
+			{
+				return "LEFT";
+			}
+			else if ( x_1 < coordinates[0] && x_2 < coordinates[1] && ( (coordinates[0] - x_1) > delta || (coordinates[1] - x_2) > delta ) || x_1 < coordinates[0] && x_2 > coordinates[1] && ( (coordinates[0] - x_1) > delta || (x_2 - coordinates[1]) > delta ) )
+			{
+				return "RIGHT";
+			}
+			else
+			{
+				return "FORWARD";
+			}
+		}
+		
+		/*
+		* Detect direction for correction depends on right line.
+		* Cases depends on "perfect" right line with coordinates (605;0), (800;267).
+		* If it all clear, returns "FORWARD".
+		*/
+		string right_side (vector<float> coordinates)
+		{
+			float x_1 = 773; //620
+			float x_2 = 850; //820
+			float delta = 10; //40
+			//cout << "IDEAL: 605 800\n";
+                        //cout << "REAL: " << coordinates[0] << " " << coordinates[1] << endl;
+			cout << coordinates[0] << " " << coordinates[1];
+			/*if (coordinates[0] < 400 && coordinates[1] < 600)
+                        {
+                                return "BLANK";
+                        }
+
+			else*/ if ( x_1 > coordinates[0] && x_2 > coordinates[1] && ( (x_1 - coordinates[0]) > delta || (x_2 - coordinates[1]) > delta ) || x_1 > coordinates[0] && x_2 < coordinates[1] && ( (x_1 - coordinates[0]) > delta || (coordinates[1] - x_2) > delta ) )
+                        {
+                                return "LEFT";
+                        }
+                        else if ( x_1 < coordinates[0] && x_2 < coordinates[1] && ( (coordinates[0] - x_1) > delta || (coordinates[1] - x_2) > delta ) || x_1 < coordinates[0] && x_2 > coordinates[1] && ( (coordinates[0] - x_1) > delta || (x_2 - coordinates[1]) > delta ) )
+                        {
+                                return "RIGHT";
+                        }
+                        else
+                        {
+                                return "FORWARD";
+                        }
+		}
+
+		/*
+		* Detection of correction direction depends on directions for left and right sides.
+		*/
+		string prediction (string dec1, string dec2)
+		{
+			//cout << dec1 << " || " << dec2 << endl;
+			if (dec1 == dec2 && dec1 != "BLANK") return dec2;
+			else if (dec1 != dec2 && dec2 == "BLANK") return dec1;
+			else if (dec1 != dec2 && dec1 == "BLANK") return dec2;
+			//else if (dec1 == "RIGHT" && dec2 == "LEFT" || dec1 == "LEFT" && dec2 == "RIGHT") return dec2;
+			else return "FORWARD";
+			/*if (dec2 != "BLANK") return dec2;
+			else return dec1;*/
+		}
+	public:
+		
+		/*
+		* Seraches average of left an right lines coefficients.
+		* Then detect directions for correction.
+		*/
+		string correction (vector<float> left_up, vector<float> left_bottom, vector<float> right_up, vector<float> right_bottom, int y_up, int y_bottom)
+		{
+			float k_left, k_right, b_left, b_right;
+			k_left = left_bottom[0];
+			b_left = left_bottom[1];
+			k_right = right_bottom[0];
+			b_right = right_bottom[1];
+			y_up = 200;
+			y_bottom = 300;
+/*
+			if (left_up[0] == 0)
+			{
+				k_left = left_bottom[0];
+			}
+			else if (left_bottom[0] == 0)
+			{
+				k_left = left_up[0];
+			}
+			else
+			{
+				k_left = (left_up[0] + left_bottom[0]) / 2;
+			}
+
+			if (left_up[1] == 0)
+                        {
+                                b_left = left_bottom[1];
+                        }
+                        else if (left_bottom[1] == 0)
+                        {
+                                b_left = left_up[1];
+                        }
+                        else
+                        {
+                                b_left = (left_up[1] + left_bottom[1]) / 2;
+                        }
+
+			if (right_up[0] == 0)
+                        {
+                                k_right = right_bottom[0];
+                        }
+                        else if (right_bottom[0] == 0)
+                        {
+                                k_right = right_up[0];
+                        }
+                        else
+                        {
+                                k_right = (right_up[0] + right_bottom[0]) / 2;
+                        }
+
+			if (right_up[1] == 0)
+                        {
+                                b_right = right_bottom[1];
+                        }
+                        else if (right_bottom[1] == 0)
+                        {
+                                b_right = right_up[1];
+                        }
+                        else
+                        {
+                                b_right = (right_up[1] + right_bottom[1]) / 2;
+                        }
+*/
+			vector<float> left_line(2);
+			vector<float> right_line(2);
+			string left_prediction;
+			string right_prediction;
+			if (k_left != 0 && abs(k_left) > 0.01)
+			{
+				left_line[0] = (y_up - b_left) / k_left;
+				left_line[1] = (y_bottom - b_left) / k_left;
+				/*if (left_line[0] > 399) left_prediction = "BLANK";
+				else*/ left_prediction = left_side(left_line);
+			}
+			else
+			{
+				cout << 0 << " " << 0 << " ";
+				left_prediction = "BLANK";
+			}
+			if (k_right != 0 && abs(k_right) > 0.01)
+			{
+				right_line[0] = (y_up - b_right) / k_right;
+				right_line[1] = (y_bottom - b_right) / k_right;
+				/*if (right_line[0] < 400) right_prediction = "BLANK";
+				else*/ right_prediction = right_side(right_line);
+			}
+			else
+			{
+				cout << 0 << " " << 0;
+				right_prediction = "BLANK";
+			}
+			cout << endl << left_prediction << endl << right_prediction;
+			if (left_prediction == "RIGHT" && right_prediction == "LEFT" || left_prediction == "LEFT" && right_prediction == "RIGHT")
+			{
+				//cout << "LEFT SIDE: " << k_left << " || RIGHT SIDE: " << k_right << endl;
+				/*if ((abs(b_left) <= 0 || abs(b_left) >= 800) && (abs(b_right) > 0 && abs(b_right) < 800)) return right_prediction;
+				else if ((abs(b_right) <= 0 || abs(b_right) >= 800) && (abs(b_left) > 0 && abs(b_left) < 800)) return left_prediction; 
+				else*/ if (abs(k_left) > abs(k_right)) return left_prediction;
+				else if (abs(k_left) < abs(k_right)) return right_prediction;
+				else return "BLANK";
+			}
+			else return prediction(left_prediction, right_prediction);
+		}
+/*
+		float angle_calc(vector< vector<int> > r_line, vector< vector<int> > l_line)
+		{
+			vector< vector<int> > corrector(2, vector<int>(2));
+			corrector[0][0] = 0;
+			corrector[0][1] = 100;
+			corrector[1][0] = 800;
+			corrector[0][1] = 100;
+			int c_A = corrector[0][1] - corrector[1][1];
+			int c_B = corrector[0][0] - corrector[1][0];
+			int c_C = (corrector[0][0] * corrector[1][1]) - (corrector[0][1] * corrector[1][0]);
+			int k_A, k_B, k_C, tg_up, tg_bottom;
+			float tg;
+			if (r_line[0][0] - r_line[1][0] != 0)
+			{
+				k_A = r_line[0][1] - r_line[1][1];
+				k_B = r_line[0][0] - r_line[1][0];
+				k_C = (r_line[0][0] * r_line[1][1]) - (r_line[0][1] * r_line[1][0]);
+				tg_up = (c_A * k_B) - (k_A * c_B);
+				tg_bottom = (c_A * c_B) + (k_B * c_B);
+				tg = abs(tg_up / tg_bottom);
+			}
+			else if (l_line[0][0] - l_line[1][0] != 0)
+			{
+				k_A = l_line[0][1] - l_line[1][1];
+				k_B = l_line[0][0] - l_line[1][0];
+				k_C = (l_line[0][0] * l_line[1][1]) - (l_line[0][1] * l_line[1][0]);
+				tg_up = (c_A * k_B) - (k_A * c_B);
+				tg_bottom = (c_A * c_B) + (k_B * c_B);
+				tg = abs(tg_up / tg_bottom);
+			}
+			else tg = -1;
+			return tg;
+		}
+
+		string dynamic_correction(float corr)
+		{
+			corr = atan(corr) * 180 / M_PI;
+			cout << corr;
+			if ((corr >= 56 && corr < 60) || (corr >= 88 && corr <=90))
+			{
+				cout << "  ======   Correct Less\n";
+				return "170!";
+			}
+			else if ((corr >= 53 && corr < 56) || (corr >= 74 and corr < 88))
+			{
+				cout << "  ======   Correct Small\n";
+				return "200!";
+			}
+			else if ((corr >= 49 && corr < 53) || (corr >= 63 and corr < 66))
+			{
+				cout << "  ======   Correct Medium\n";
+				return "225!";
+			}
+			else if ((corr >= 44 && corr < 47) || (corr >= 60 and corr < 63))
+			{
+				cout << "  ======   Correct Bigger\n";
+				return "250!";
+			}
+			else if (corr >= 42 and corr < 44)
+			{
+				cout << "  ======   Correct Large\n";
+				return "270!";
+			}
+			else if ((corr >= 38 && corr < 42) || (corr >= 66 and corr < 74))
+			{
+				cout << "  ======   Correct Huge\n";
+				return "285!";
+			}
+			else if (corr >= 47 and corr < 48)
+			{
+				cout << "  ======   Correct Enormous\n";
+				return "300!";
+			}
+			else if (corr != 0)
+			{
+				cout << "  ======   Correct Bulk\n" << corr;
+				return "330!";
+			}
+		}
+
+*/
+		
+
+};

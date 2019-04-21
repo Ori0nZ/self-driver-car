@@ -1,0 +1,282 @@
+#include "b_w.h"
+#include "line_reco.h"
+#include <iostream>
+#include <ctime>
+#include <unistd.h>
+#include <wiringSerial.h>
+#include <raspicam/raspicam.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+using namespace std;
+using namespace cv;
+using namespace raspicam;
+
+B_W *b_w = new B_W;
+Line *line_reco = new Line;
+RaspiCam Picamera;
+string color;
+
+class Test_Cam
+{
+	private:
+
+		/*
+		* Open camera stream with special settings.
+		*/
+		void setup()
+		{
+			Picamera.setFormat(RASPICAM_FORMAT_BGR);
+			Picamera.setCaptureSize(800, 400);
+			Picamera.setSaturation(0);
+			Picamera.setBrightness(70);
+			Picamera.setISO(800);
+			Picamera.setExposure(RASPICAM_EXPOSURE_OFF);
+			Picamera.setRotation(180);
+
+			cout << "Opening video stream\n";
+			if (!Picamera.isOpened())
+			{
+				if ( !Picamera.open())
+				{
+					cout << "Unable to open\n";
+				}
+			}
+		}
+
+		/*
+		* Close camera stream.
+		*/
+		void setdestruct()
+		{
+			cout << "Closing video stream\n";
+			Picamera.release();
+		}
+
+		/*
+		* Sends command to arduino.
+		*/
+		void sendcmd(int serial_port, string str)
+		{
+			int i = 0;
+			cout << "Command: " << str << endl;
+			while(1)
+			{
+				serialPutchar(serial_port, str[i]);
+				fflush(stdout);
+				if (str[i] == '!') return;
+				i++;
+			}
+		}
+
+		/*
+		* Turn function.
+		*/
+		void corner_stop(int serial_port, string direction)
+		{
+			setup();
+			time_t t1 = time(0);
+			int counter = 0;
+			if (direction == "left") sendcmd (serial_port, "LFT!");
+			else sendcmd (serial_port, "RGT!");
+			while (1)
+			{
+
+				Picamera.grab();
+				unsigned char *data=new unsigned char[Picamera.getImageTypeSize(RASPICAM_FORMAT_BGR)];
+				Picamera.retrieve (data);
+				Mat frame(400, 800, CV_8UC3);
+				memcpy(frame.data, data, 400*800*3*sizeof(unsigned char));
+				delete data;
+				string mid = b_w->mid_detect(frame, 350, 0, 100, 50);
+				string rgt = b_w->mid_detect(frame, 750, 100, 50, 50);
+				string lft = b_w->mid_detect(frame, 0, 100, 50, 50);
+				cout << "UP: " << mid << " || COLOR: " << color <<"; RGT: " << rgt << "; LFT: " << lft << endl;
+				time_t t2 = time(0);
+			/*	if (mid == color)
+				{
+					counter++;
+					if (color == "Black") color = "White";
+					else color = "Black";
+				}
+				if (counter >= 2 && mid != rgt && mid != lft)
+				{
+					cout << "CORNER BY ALGO\n";
+					usleep(400000);
+					sendcmd(serial_port, "STP!");
+					break;
+				}
+				else if (t2 >= t1 + 3)
+				{
+					cout << "CORNER BY TIME\n";
+					sendcmd(serial_port, "STP!");
+					break;
+				}
+			}
+			setdestruct();
+		}
+
+		/*
+		* Move forward. It count squares and correct loacation, depends on squares boards.
+		*/
+		void FWD_correction (int serial_port, int zxc)
+		{
+			setup();
+			string previous = color;
+			int n = 0, count_qrd = 0;
+			while (1)
+			{
+				if (previous == "")
+				{
+					// If it first time when camera was setuped,
+					// it only need to find color
+					Picamera.grab();
+					unsigned char *data=new unsigned char[Picamera.getImageTypeSize(RASPICAM_FORMAT_BGR)];
+					Picamera.retrieve (data);
+					Mat frame(400, 800, CV_8UC3);
+					memcpy(frame.data, data, 400*800*3*sizeof(unsigned char));
+					delete data;
+					Rect roi_bottom(0, frame.size().height - 200, frame.size().width, 100);
+					Mat frame_bottom = frame(roi_bottom);
+					Mat blur_bottom, mask_bottom;
+					bilateralFilter(frame_bottom, blur_bottom, 15, 75, 75);
+					static const int arr[] = {0, 0, 0};
+					vector<int> lower_white (arr, arr + sizeof(arr) / sizeof(arr[0]) );
+					static const int arr1[] = {150, 150, 150};
+					vector<int> upper_white (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
+					inRange(blur_bottom, lower_white, upper_white, mask_bottom);
+					previous = b_w->color_detect_start(mask_bottom);
+					cout << "FIRST: " << previous << endl;
+				}
+				else
+				{
+					//sendcmd(serial_port, "ZC!");
+					sendcmd(serial_port, "FWD!");
+					Picamera.grab();
+					unsigned char *data=new unsigned char[Picamera.getImageTypeSize(RASPICAM_FORMAT_BGR)];
+					Picamera.retrieve (data);
+					Mat frame(400, 800, CV_8UC3);
+					memcpy(frame.data, data, 400*800*3*sizeof(unsigned char));
+					delete data;
+					Mat blur_up, blur_bottom, mask_up, mask_bottom;
+					Rect roi_up(0, 100, frame.size().width, 100);
+					Rect roi_bottom(0, 300, frame.size().width, 100);
+					Mat frame_up = frame(roi_up);
+					Mat frame_bottom = frame(roi_bottom);
+					static const int arr[] = {0, 0, 0};
+					vector<int> lower_white (arr, arr + sizeof(arr) / sizeof(arr[0]) );
+					static const int arr1[] = {150, 150, 150};
+					vector<int> upper_white (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
+					bilateralFilter(frame_up, blur_up, 15, 75, 75);
+					bilateralFilter(frame_bottom, blur_bottom, 15, 75, 75);
+					inRange(blur_up, lower_white, upper_white, mask_up);
+					inRange(blur_bottom, lower_white, upper_white, mask_bottom);
+					//imwrite ("up_mask.jpg", mask_up);
+					//imwrite ("bottom_mask.jpg", mask_bottom);
+					//cout << "INRANGE && BLUR\n";
+					//pair<string, vector<float> > answer_up;
+					//pair<string, vector<float> > answer_bottom;
+					vector <float> answer_up(4);
+					vector <float> answer_bottom(4);
+					//cout << "!!!BOTTOM!!!\n";
+					b_w->color_detect(mask_bottom, previous);
+					string info = b_w->get_color();
+					answer_bottom = b_w->get_coefficients();
+					//cout << "NOW DONE\n";
+					//cout << "!!!!!UP!!!!!\n";
+					b_w->color_detect(mask_up, previous);
+					string mid = b_w->get_color();
+					answer_up = b_w->get_coefficients();
+					//cout << "NEXT DONE\n";
+					//string info = answer_bottom.first;
+					//string mid = answer_up.first;
+					cout << "PREVIOUS: " << previous << " || NOW: " << info << " || NEXT: " << mid << endl;;
+					answer_up[1] += 100;
+					answer_up[3] += 100;
+					answer_bottom[1] += 300;
+					answer_bottom[3] += 300;
+					//line (frame, Point ((int)(0 - answer_up.second[1]) / answer_up.second[0], 0), Point ((int)(100 - answer_up.second[1]) / answer_up.second[0], 100, Scalar (0, 255, 255));
+					//line (frame, Point ((0 - answer_up.second[3]) / answer_up.second[2], 0), Point ((100 - answer_up.second[3]) / answer_up.second[2], 100, Scalar (0, 255, 255));
+					//line (frame, Point ((200 - answer_bottom.second[1]) / answer_bottom.second[0], 200), Point ((300 - answer_bottom.second[1]) / answer_bottom.second[0], 300, Scalar (0, 255, 255);
+					//line (frame, Point ((200 - answer_bottom.second[3]) / answer_bottom.second[2], 200), Point ((300 - answer_bottom.second[3]) / answer_bottom.second[2], 300, Scalar (0, 255, 255));$
+					if (previous != info)
+					{
+						//cout << "TRUE" << endl;
+						count_qrd++;
+					}
+					//cout << "COUNT: " << count_qrd << " || ZXC: " << zxc << endl;
+					// Stop cases.
+					if (count_qrd >= zxc)
+					{
+						n++;
+						if (mid != info)
+						{
+							cout << "STOP BY ALGORITHM\n";
+							sendcmd(serial_port, "STP!");
+							setdestruct();
+							color = info;
+							return;
+						}
+						else if (count_qrd > zxc || n > 2)
+						{
+							cout << "STOP BY TIME\n";
+							sendcmd(serial_port, "STP!");
+							setdestruct();
+							color = info;
+							return;
+						}
+					}
+					previous = info;
+
+					// Correction.
+					vector <float> left_up(2);
+					vector <float> left_bottom(2);
+					vector <float> right_up(2);
+					vector <float> right_bottom(2);
+					left_up[0] = answer_up[0];
+					left_up[1] = answer_up[1];
+					right_up[0] = answer_up[2];
+					right_up[1] = answer_up[3];
+					left_bottom[0] = answer_bottom[0];
+					left_bottom[1] = answer_bottom[1];
+					right_bottom[0] = answer_bottom[2];
+					right_bottom[1] = answer_bottom[3];
+					string command = line_reco->correction(left_up, left_bottom, right_up, right_bottom, 0, 267);
+					if (command == "LEFT")
+					{
+						sendcmd(serial_port, "LC+250!");
+					}
+					else if (command == "RIGHT")
+					{
+						sendcmd(serial_port, "RC+300!");
+					}
+					else
+					{
+						sendcmd(serial_port, "ZC!");
+					}
+
+				}
+			}
+		}
+
+	public:
+
+		void left (int serial_port)
+		{
+			corner_stop(serial_port, "left");
+			usleep (1000000);
+		}
+
+		void right (int serial_port)
+		{
+			corner_stop(serial_port, "right");
+			usleep (1000000);
+		}
+
+		void forward (int serial_port, int count)
+		{
+			FWD_correction (serial_port, count);
+			usleep (1000000);
+		}
+};
