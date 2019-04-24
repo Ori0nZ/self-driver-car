@@ -2,7 +2,7 @@
 #include <string.h>
 #include <errno.h>
 #include <wiringSerial.h>
-
+#include <stdlib.h>
 int main ()
 {
   int port_num;
@@ -13,26 +13,22 @@ int main ()
     return 1 ;
   }
   printf("Successful\n");
-
-  while (1)
-  {
-    printf("Sent: ");
-    while(1)
-	{
+	unsigned char arraycomd[4] = {"FWD", "STP", "LFT", "RFT"};
+    printf("Do command: ");
+    
       unsigned char tx;
-      scanf ("%c",&tx);
-      if (tx == '\n')
-	  {
-        tx = '!';
-		serialPutchar(port_num, tx);
-		fflush(stdout);
-		break;
-      }
-      if (tx != '\0')
-	  {
-        serialPutchar(port_num, tx);
-      }
-      fflush(stdout);
+      tx = arraycomd[0];
+	serialPutchar(port_num, tx);
+	sleep(2000);
+	tx = arraycomd[3];
+	  serialPutchar(port_num, tx);
+	  sleep(2000);
+	  tx = arraycomd[2];
+	  serialPutchar(port_num, tx);
+	  sleep(2000);
+	  tx = arraycomd[1];
+	  serialPutchar(port_num, tx);
+	  sleep(2000);
     }
   }
 }
